@@ -138,7 +138,8 @@ CEOdata <- function(kind = "barometer",
     #
     if (is.character(reo)) {
       if (length(reo) == 1) {
-        url.reo <- CEOmetadata()$`Enllac matriu de dades`[CEOmetadata()$REO == reo]
+        idx <- !is.na(CEOmetadata()$REO) & CEOmetadata()$REO == reo
+        url.reo <- CEOmetadata()$`Enllac matriu de dades`[idx]
         if (!is.na(url.reo)) {
           tmp <- tempfile()
           try({download.value <- download.file(url.reo, tmp)}, silent = TRUE)
