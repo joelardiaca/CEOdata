@@ -3,6 +3,7 @@
 \docType{package}
 \encoding{UTF-8}
 \name{CEOdata}
+\alias{CEOdata-package}
 \alias{CEOdata}
 \title{Import datasets / microdata from the "Centre d'Estudis d'Opinio"}
 \usage{
@@ -64,4 +65,17 @@ d746 <- CEOdata(reo = "746")
 }
 \references{
 \url{http://xavier-fim.net/packages/CEOdata/}.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://ceo.gencat.cat/ca/inici/}
+  \item \url{https://github.com/ceopinio/CEOdata/}
+  \item Report bugs at \url{https://github.com/ceopinio/CEOdata/issues/}
+}
+
+}
+\author{
+\strong{Maintainer}: Xavier Fernández-i-Marín \email{xavier.fim@gmail.com} (\href{https://orcid.org/0000-0002-9522-8870}{ORCID})
+
 }

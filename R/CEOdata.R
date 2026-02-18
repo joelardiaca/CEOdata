@@ -137,57 +137,37 @@ CEOdata <- function(kind = "barometer",
     # Serve only a single, untreated REO
     #
     if (is.character(reo)) {
+
       if (length(reo) == 1) {
-        idx <- !is.na(CEOmetadata()$REO) & CEOmetadata()$REO == reo
-        url.reo <- CEOmetadata()$`Enllac matriu de dades`[idx]
-        if (!is.na(url.reo)) {
-          tmp <- tempfile()
-          try({download.value <- download.file(url.reo, tmp)}, silent = TRUE)
-          if (exists(quote(download.value))) {
-            if (download.value == 0) { # success downloading the file
-              files.within <- unzip(tmp, list = TRUE)
-              if (dim(files.within)[1] == 1) {
-                if (!stringr::str_detect(files.within$Name, "\\.sav$")) {
-                  warning("This zip file does not contain a .sav file")
-                  return(NULL)
-                } else {
-                  file <- unzip(tmp, files.within$Name)
-                  message("Converting the original data into R. This may take a while.")
-                  try({d <- haven::read_spss(file)}, silent = TRUE)
-                  if (!exists(quote(d))) {
-                    warning("The .sav file can't be processed.")
-                    return(NULL)
-                  } else {
-                    # Arrange factors
-                    if (!raw) { # Transform SPSS labels into proper R factors
-                      d <- d |>
-                        dplyr::mutate_if(is_haven_labelled, haven::as_factor, levels = "default")
-                    }
-                  }
-                  if (file.exists(file)) {
-                    unlink(file)
-                  }
-                }
-              } else {
-                warning("The zip file does not contain one, and only one, single file")
-                return(NULL)
-              }
-            }
-          } else {
-            message("A problem downloading the specific barometer file has occurred. The server may be temporarily down, or the file name has changed. Please try again later or open an issue at https://github.com/ceopinio/CEOdata indicating 'Problem with barometer'")
-            return(NULL)
-          }
-        } else {
-          message(paste0("There is no dataset available for REO ", reo))
-          return(NULL)
+
+        meta <- CEOmetadata()
+
+        idx <- !is.na(meta$REO) & meta$REO == reo
+
+        if (sum(idx) == 0) {
+          stop(paste0("There is no dataset available for REO ", reo, "."), call. = FALSE)
         }
+        if (sum(idx) > 1) {
+          stop(paste0("Multiple entries found for REO ", reo, " in CEOmetadata()."), call. = FALSE)
+        }
+
+        url.reo <- meta$`Microdades 1`[idx]
+
+        if (is.na(url.reo) || !nzchar(url.reo)) {
+          stop(paste0("There is no dataset link available for REO ", reo, "."), call. = FALSE)
+        }
+
+        message("Downloading and reading REO dataset. This may take a while.")
+        d <- ceodata_download_and_read(url.reo, raw = raw)
+
       } else {
-        message("'reo' must pass only a single REO.")
-        return(NULL)
+        stop("'reo' must be a character vector of length 1.", call. = FALSE)
       }
+
     } else {
-      stop("'reo' must be a character vector.")
+      stop("'reo' must be a character vector.", call. = FALSE)
     }
+
   }
   #
   return(d)
