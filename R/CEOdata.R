@@ -1,175 +1,107 @@
-#' Import datasets / microdata from the "Centre d'Estudis d'Opinio"
+#' Import datasets / microdata from the Centre d'Estudis d'Opinió
 #'
 #' Easy and convenient access to the datasets / microdata of the "Centre
 #' d'Estudis d'Opinio", the Catalan institution for polling and public opinion.
-#' The package uses the data stored in the servers of the CEO and returns it in
-#' a tidy format (tibble).
-#' 
-#' It works either by specifying the kind of merged barometer (using the
-#' \code{kind} argument), or either providing a singular study (using the
-#' \code{reo} argument).
+#' The package uses the data stored in the open data platform of "Generalitat de 
+#' Catalunya", the catalan government, and returns it in a tidy format (tibble). 
+#' The function can return either:
+#' (1) an accumulated microdata series (identified by `series`), or
+#' (2) a single study microdata dataset (identified by `reo`).
+#'
+#' Accumulated series are obtained from the Dades Obertes catalogue and are
+#' referenced by `codi_serie` (e.g. "BOP_presencial").
 #'
 #' @encoding UTF-8
-#' @param kind Character vector with the sort of microdata required. Defaults to "barometer", that contains the whole set of Barometers from 2014 (presential interviews). "barometer_until_2013" contains the interviews performed by phone until 2013, with a somewhat different questionnaire and structure. For such dataset you need a third-party software installed in your computer to be able to uncompress the RAR original file. It is the option by default. But if a specific reo study is requested in the \code{reo} argument, then the \code{kind} argument does not apply anymore and only a specific study is retrieved.
-#' @param reo Character vector of length one that allows to get the dataset of a specific REO study (Registre d'Estudis d'Opinio, the internal register ID used by the CEO) to download. By default (when \code{reo = NA}) it uses the \code{kind} argument. Not all the studies carried on by the CEO (and therefore listed in the \code{CEOmeta()} function call) have microdata available. Only the ones that return TRUE to the column \code{microdata_available} in \code{CEOmeta()}.
-#' @param raw Logical value to indicate if SPSS labels are transformed into factors. Defaults to FALSE. Otherwise, when TRUE, it returns the matrices as imported by haven::read_spss() without modification. Does not apply to data from singular REOs, only to barometers retrieved using \code{kind}.
-#' @param extra_variables Logical value as to whether include (default) complementary variables such as date (Data). Defaults to TRUE. Names of such new variables only use upper case in the first letter. Extra variables are added at the end. Does not apply to data from singular REOs, only to barometers retrieved using \code{kind}.
-#' @param date_start Character vector with a starting date ("YYYY-MM-DD") for the data. It only applies to the barometers retrieved using \code{kind}, not to other studies.
-#' @param date_end Character vector with an end date ("YYYY-MM-DD") for the data. It only applies to the barometers retrieved using \code{kind}, not to other studies.
+#' @param series Character scalar indicating the accumulated microdata series to download
+#'   (a `codi_serie` value returned by `CEOaccumulated_meta()`). Defaults to "BOP_presencial".
+#'   Ignored if `reo` is provided.
+#' @param reo Character scalar indicating the REO code of a single study to download.
+#'   Default is NA (meaning: use `series`).
+#' @param raw Logical. If FALSE (default), converts SPSS labelled vectors into R factors.
+#'   If TRUE, returns the raw haven-labelled format.
 #' @export
-#' @return A tibble with the individuals' responses to the questionnaire retrieved.
+#' @return A tibble with individuals' responses to the requested dataset.
 #' @examples
-#'\dontrun{
-#' # Get the merged barometer from 2014, by default (assume kind = "barometer").
+#' \dontrun{
+#' # Default: accumulated microdata series (BOP_presencial)
 #' d <- CEOdata()
 #'
-#' # Get the number of individuals surveyed and the number of variables recorded.
-#' dim(d)
+#' # Load another accumulated series by codi_serie
+#' d_tel <- CEOdata(series = "BOP_telefonica")
 #'
-#' # Get the identifiers of the different Barometers retrieved
-#' unique(d$BOP_NUM)
-#'
-#' # Get a specific study
-#' d746 <- CEOdata(reo = "746")
-#'}
-CEOdata <- function(kind = "barometer",
+#' # Load a single study by REO
+#' d1145 <- CEOdata(reo = "1145")
+#' }
+
+CEOdata <- function(series = "BOP_presencial",
                     reo = NA,
-                    raw = FALSE,
-                    extra_variables = TRUE,
-                    date_start = NA, date_end = NA) {
+                    raw = FALSE) {
 
-  # Function used later to process SPSS labels into factors
-  is_haven_labelled <- function(x) {
-    ifelse(length(which(class(x) %in% "haven_labelled")) > 0,
-           TRUE, FALSE)
+  # Validate `raw`
+  if (!is.logical(raw) || length(raw) != 1L || is.na(raw)) {
+    stop("'raw' must be a single logical value.", call. = FALSE)
   }
-  if (is.na(reo)) {
-    #
-    # Define URLs
-    #
-    url.phone.barometer <- "https://ceo.gencat.cat/web/.content/20_barometre/Matrius_BOP/2013_Microdades_anonimitzades_fusio_cine_telf.zip"
-    file.phone.barometer.rar <- "2013_Microdades_anonimitzades_fusio_cine_telf.zip"
-    file.phone.barometer <- "Microdades anonimitzades fusio telefonica.sav"
-    url.presential.barometer <- "https://ceo.gencat.cat/web/.content/20_barometre/Matrius_BOP/Microdades_barometre.zip"
-    file.presential.barometer <- "microdades_anonimitzades_bop_presencial.sav"
-    # Process barometer merged from 2014
-    if (kind == "barometer") {
-      message("Downloading the barometer.")
-      tmp <- tempfile()
-      try({download.value <- download.file(url.presential.barometer, tmp)}, silent = TRUE)
-      if (exists(quote(download.value))) {
-        if (download.value == 0) { # success downloading the file
-          file <- unzip(tmp, file.presential.barometer)
-          message("Converting the original data into R. This may take a while.")
-          d <- haven::read_spss(file)
-          if (file.exists(file)) {
-            unlink(file)
-          }
-        }
-      } else {
-        message("A problem downloading the barometer file has occurred. The server may be temporarily down, or the file name has changed. Please try again later or open an issue at https://github.com/ceopinio/CEOdata indicating 'Problem with barometer'")
-        return(NULL)
-      }
-    }
-    # Process barometer merged until 2013
-    if (kind == "barometer_until_2013") {
-      message("Downloading the barometer until 2013.")
-      try({download.value <- download.file(url.phone.barometer, file.phone.barometer.rar)}, silent = TRUE)
-      if (exists(quote(download.value))) {
-        if (download.value == 0) { # success downloading the file
-          # This must be fixed because the original file as of 211027 is not a zip file, but a RAR file
-          message("Uncompressing the original downloaded file. This may take a while.")
-          system("unrar e 2013_Microdades_anonimitzades_fusio_cine_telf.zip")
-          file <- file.phone.barometer
-          message("Converting the original data into R. This may take a while.")
-          d <- haven::read_spss(file)
-          names(d) <- toupper(names(d))
-          # Add variable REO
-          d <- d |>
-            dplyr::mutate(REO = as.numeric(stringr::str_extract(BOP_NUM, "...$")))
-          if (file.exists(file)) {
-            unlink(file)
-          }
-          if (file.exists(file.phone.barometer.rar)) {
-            unlink(file.phone.barometer.rar)
-          }
-        }
-      } else {
-        message("A problem downloading the barometer until 2013 file has occurred. The server may be temporarily down, or the file name has changed. Please try again later or open an issue at https://github.com/ceopinio/CEOdata indicating 'Problem with barometer until 2013'")
-        return(NULL)
-      }
-    }
-    message("Post-processing the data. This may take a while.")
-    # Arrange the barometer to process
-    # Arrange factors
-    if (!raw) { # Transform SPSS labels into proper R factors
-      d <- d |>
-        dplyr::mutate_if(is_haven_labelled, haven::as_factor, levels = "default")
-    }
-    # Add extra variables (date, ...)
-    if (extra_variables) {
-      if (kind == "barometer_until_2013") {
-        d <- d |>
-          dplyr::mutate(Data = as.Date(paste(ANY,
-                                             sprintf("%02d", MES),
-                                             28, sep = "-")))
-      } else {
-        d <- d |>
-          dplyr::mutate(Data = as.Date(paste(ANY,
-                                             sprintf("%02d", MES),
-                                             ifelse(is.na(DIA), 28, DIA),
-                                             sep = "-")))
-      }
-    }
-    #
-    # Filter by dates
-    #
-    if (!is.na(date_start)) {
-      d <- d |>
-        dplyr::filter(Data >= date_start)
-    }
-    if (!is.na(date_end)) {
-      d <- d |>
-        dplyr::filter(Data <= date_end)
-    }
-  } else {
-    #
-    # Serve only a single, untreated REO
-    #
-    if (is.character(reo)) {
 
-      if (length(reo) == 1) {
-
-        meta <- CEOmetadata()
-
-        idx <- !is.na(meta$REO) & meta$REO == reo
-
-        if (sum(idx) == 0) {
-          stop(paste0("There is no dataset available for REO ", reo, "."), call. = FALSE)
-        }
-        if (sum(idx) > 1) {
-          stop(paste0("Multiple entries found for REO ", reo, " in CEOmetadata()."), call. = FALSE)
-        }
-
-        url.reo <- meta$`Microdades 1`[idx]
-
-        if (is.na(url.reo) || !nzchar(url.reo)) {
-          stop(paste0("There is no dataset link available for REO ", reo, "."), call. = FALSE)
-        }
-
-        message("Downloading and reading REO dataset. This may take a while.")
-        d <- ceodata_download_and_read(url.reo, raw = raw)
-
-      } else {
-        stop("'reo' must be a character vector of length 1.", call. = FALSE)
-      }
-
-    } else {
-      stop("'reo' must be a character vector.", call. = FALSE)
-    }
-
+  # Validate mutual exclusivity:
+  if (!missing(reo) && !missing(series) && !is.na(reo) && !is.na(series)) {
+    stop("Provide either 'reo' or 'series', but not both.", call. = FALSE)
   }
-  #
+
+
+  # ---- Mode 1: Single study (REO) ----
+  if (!is.na(reo)) {
+
+    if (!is.character(reo) || length(reo) != 1L || !nzchar(reo)) {
+      stop("'reo' must be a character scalar (e.g. '1145').", call. = FALSE)
+    }
+
+    meta <- CEOmetadata()
+
+    idx <- !is.na(meta$REO) & meta$REO == reo
+
+    if (sum(idx) == 0) {
+      stop(paste0("There is no dataset available for REO ", reo, "."), call. = FALSE)
+    }
+    if (sum(idx) > 1) {
+      stop(paste0("Multiple entries found for REO ", reo, " in CEOmetadata()."), call. = FALSE)
+    }
+
+    url.reo <- meta$`Microdades 1`[idx]
+
+    if (is.na(url.reo) || !nzchar(url.reo)) {
+      stop(paste0("There is no dataset link available for REO ", reo, "."), call. = FALSE)
+    }
+
+    message("Downloading and reading REO dataset. This may take a while.")
+    d <- ceodata_download_and_read(url.reo, raw = raw)
+
+    return(d)
+  }
+
+  # ---- Mode 2: Accumulated series ----
+  if (is.na(series)) {
+    stop("'series' must be provided when 'reo' is NA.", call. = FALSE)
+  }
+  if (!is.character(series) || length(series) != 1L || !nzchar(series)) {
+    stop("'series' must be a character scalar (e.g. 'BOP_presencial').", call. = FALSE)
+  }
+
+  m <- CEOaccumulated_meta(series = series)
+
+  if (is.null(m) || nrow(m) == 0) {
+    stop(paste0("Unknown accumulated series: ", series, "."), call. = FALSE)
+  }
+  if (nrow(m) > 1) {
+    stop(paste0("Multiple entries found for accumulated series: ", series, "."), call. = FALSE)
+  }
+
+  url <- m$microdades_1[1]
+  if (is.na(url) || !nzchar(url)) {
+    stop(paste0("No 'microdades_1' link available for accumulated series: ", series, "."), call. = FALSE)
+  }
+
+  message("Downloading and reading accumulated series. This may take a while.")
+  d <- ceodata_download_and_read(url, raw = raw)
+
   return(d)
 }
-
