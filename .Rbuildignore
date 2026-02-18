@@ -1,2 +1,3 @@
 .gitignore
 CEOdata-cheatsheet.pdf
+^\.github$
