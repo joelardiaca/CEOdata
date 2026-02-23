@@ -131,7 +131,7 @@ survey.data <- d |>
          Income = ifelse(INGRESSOS_1_15 %in% c("No ho sap", "No contesta"), 
                          NA,
                          INGRESSOS_1_15),
-         Date = Data,
+         Date = DATA_FIN,
          # Reorganize factor labels
          `Place of birth` = factor(case_when(
             LLOC_NAIX == "Catalunya" ~ "Catalonia",

@@ -13,6 +13,5 @@
 #' @importFrom stringr str_detect str_extract str_sub str_trim
 #' @importFrom urltools domain
 #' @importFrom jsonlite fromJSON
-#' @docType package
 #' @name CEOdata
 NULL
